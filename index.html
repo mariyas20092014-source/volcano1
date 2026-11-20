@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vowel Volcano — KOH Speakers</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#0d0820;user-select:none}
+#bg-video{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}
+
+/* PROGRESS BAR */
+#pb-wrap{position:fixed;top:0;left:0;right:0;height:6px;background:rgba(255,255,255,.15);z-index:20}
+#pb{height:100%;width:0%;background:linear-gradient(90deg,#2ecc71,#f1c40f,#e74c3c);transition:width .4s}
+
+/* HUD */
+#hud{position:fixed;top:10px;left:0;right:0;padding:8px 18px 0;display:flex;justify-content:space-between;align-items:flex-start;z-index:15;pointer-events:none}
+.hb{background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:8px 16px;color:#fff;min-width:100px;backdrop-filter:blur(6px)}
+.hl{font-size:11px;text-transform:uppercase;letter-spacing:1px;opacity:.7;margin-bottom:2px}
+.hv{font-size:28px;font-weight:900;color:#ffe135;line-height:1}
+.hb.p1 .hv{color:#60dfff}.hb.p2 .hv{color:#ffa940}.hb.cr{text-align:center}.hb.ri{text-align:right}
+
+/* GAME CONTAINER */
+#gc{position:fixed;inset:0;z-index:5}
+
+/* CARTS */
+.cart{position:absolute;bottom:20px;touch-action:none;cursor:grab;display:flex;justify-content:center;align-items:center;
+  filter:drop-shadow(0 12px 16px rgba(0,0,0,.6));transition:filter .15s;z-index:6}
+.cart:active{cursor:grabbing}
+.cart img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;pointer-events:none;-webkit-user-drag:none}
+.cart-lbl{position:relative;font-weight:900;color:#fff;-webkit-text-stroke:3px #000;text-shadow:0 4px 15px rgba(0,0,0,.9);pointer-events:none;z-index:2;transform:translateY(-20px)}
+/* Green glow = active (recently moved, can catch) */
+.cart.ca{filter:drop-shadow(0 12px 16px rgba(0,0,0,.6)) drop-shadow(0 0 22px rgba(80,255,120,.8))}
+/* Red flash = wrong catch */
+.cart.cw{filter:drop-shadow(0 12px 16px rgba(0,0,0,.6)) drop-shadow(0 0 22px rgba(255,50,50,.95))}
+.pbadge{position:absolute;top:-38px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.75);border:1px solid rgba(255,255,255,.2);color:#fff;font-size:12px;font-weight:700;padding:4px 12px;border-radius:20px;white-space:nowrap;backdrop-filter:blur(4px)}
+.khint{position:absolute;bottom:-28px;left:50%;transform:translateX(-50%);font-size:13px;color:rgba(255,255,255,.65);white-space:nowrap}
+
+/* BUBBLES — wobble is applied via CSS class, spawn scale is set via JS transform */
+.bubble{position:absolute;border-radius:50%;display:flex;justify-content:center;align-items:center;text-align:center;padding:6px;
+  font-weight:800;color:#111;pointer-events:none;
+  background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.95) 0%,rgba(220,240,255,.8) 55%,rgba(180,220,255,.55) 100%);
+  border:3px solid rgba(120,190,230,.85);
+  box-shadow:inset -4px -4px 10px rgba(0,0,0,.08),inset 3px 3px 10px rgba(255,255,255,.65),0 6px 20px rgba(0,0,0,.4)}
+/* Vowel hint (easy mode) */
+.bubble.bv{background:radial-gradient(circle at 35% 30%,rgba(255,248,200,.95) 0%,rgba(255,220,130,.85) 55%,rgba(230,175,60,.6) 100%);border-color:rgba(220,165,20,.9)}
+/* Wrong-cart flash */
+.bubble.bw{color:#cc0000!important;border-color:rgba(220,0,0,.9)!important}
+/* Wobble when fully spawned */
+.bubble.wobbling{animation:wobble 2.5s ease-in-out infinite}
+@keyframes wobble{0%,100%{transform:scale(1) rotate(0deg)}33%{transform:scale(1.02) rotate(.4deg)}66%{transform:scale(.98) rotate(-.4deg)}}
+
+/* POP animation on correct catch */
+@keyframes popBurst{
+  0%  {transform:scale(1);opacity:1;filter:brightness(1)}
+  35% {transform:scale(1.6);opacity:.9;filter:brightness(2.5)}
+  100%{transform:scale(.1);opacity:0;filter:brightness(1)}
+}
+/* Expanding pop rings */
+.pop-ring{position:absolute;border-radius:50%;pointer-events:none;z-index:24;
+  animation:ringBurst .5s ease-out forwards}
+@keyframes ringBurst{
+  0%  {transform:scale(.6);opacity:.9}
+  100%{transform:scale(3);opacity:0}
+}
+
+/* TRAJECTORY (easy mode) */
+.tl{position:absolute;width:2px;pointer-events:none;z-index:4;transform:translateX(-50%);
+  background:repeating-linear-gradient(to bottom,rgba(255,255,255,.45) 0,rgba(255,255,255,.45) 5px,transparent 5px,transparent 11px)}
+.td{position:absolute;width:24px;height:24px;border-radius:50%;border:2px dashed rgba(255,255,255,.65);transform:translate(-50%,-50%);
+  pointer-events:none;z-index:4;animation:tdp .9s ease-in-out infinite}
+@keyframes tdp{0%,100%{transform:translate(-50%,-50%) scale(1);opacity:.5}50%{transform:translate(-50%,-50%) scale(1.5);opacity:.9}}
+
+/* PARTICLES & SCORE POPUPS */
+.pt{position:absolute;border-radius:50%;pointer-events:none;z-index:25;will-change:transform,opacity}
+.sp{position:absolute;font-weight:900;pointer-events:none;z-index:26;animation:spop .9s ease-out forwards;text-shadow:1px 1px 4px rgba(0,0,0,.7)}
+@keyframes spop{0%{transform:translateY(0) scale(.6);opacity:1}60%{transform:translateY(-55px) scale(1.1);opacity:1}100%{transform:translateY(-85px);opacity:0}}
+
+/* HINT BANNER */
+#hint{position:fixed;bottom:240px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.65);backdrop-filter:blur(6px);
+  border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.85);font-size:13px;padding:7px 18px;border-radius:20px;pointer-events:none;z-index:8;white-space:nowrap}
+
+/* MODALS */
+.ov{position:fixed;inset:0;background:rgba(0,0,20,.65);backdrop-filter:blur(12px);display:flex;justify-content:center;align-items:center;z-index:100}
+.md{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.22);border-radius:28px;padding:38px 52px;text-align:center;color:#fff;
+  box-shadow:0 24px 60px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.18);max-width:640px;width:92%}
+.mt{font-size:44px;font-weight:900;margin-bottom:8px;letter-spacing:-1px}
+.ms{font-size:17px;opacity:.75;margin-bottom:26px;line-height:1.5}
+.btn-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+.mc{flex:1;min-width:145px;max-width:220px;background:rgba(255,255,255,.08);border:2px solid rgba(255,255,255,.18);border-radius:20px;padding:22px 16px;cursor:pointer;transition:all .18s;color:#fff}
+.mc:hover{background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.4);transform:translateY(-4px)}
+.mc .mci{font-size:38px;display:block;margin-bottom:10px}
+.mc .mcn{font-size:20px;font-weight:800;display:block}
+.mc .mcd{font-size:13px;opacity:.65;display:block;margin-top:5px}
+.dc{flex:1;min-width:130px;max-width:185px;border-radius:20px;border:2px solid transparent;padding:20px 12px;cursor:pointer;transition:all .18s;color:#fff}
+.dc:hover{transform:translateY(-4px) scale(1.03)}
+.dc.easy{background:linear-gradient(145deg,#1a7a45,#27ae60);border-color:#2ecc71}
+.dc.med{background:linear-gradient(145deg,#b5521a,#d4721e);border-color:#e67e22}
+.dc.hard{background:linear-gradient(145deg,#8e1a1a,#c0392b);border-color:#e74c3c}
+.dc .dci{font-size:34px;display:block;margin-bottom:8px}
+.dc .dcn{font-size:20px;font-weight:800;display:block}
+.dc .dca{font-size:12px;opacity:.85;display:block;margin-top:3px}
+.dc .dcd{font-size:12px;opacity:.7;display:block;margin-top:6px;line-height:1.5}
+.btn{display:inline-block;font-size:20px;font-weight:700;padding:13px 34px;border-radius:14px;border:none;cursor:pointer;transition:transform .15s,box-shadow .15s;box-shadow:0 5px 18px rgba(0,0,0,.4)}
+.btn:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.btn:active{transform:translateY(0)}
+.btn.pr{background:linear-gradient(135deg,#f1c40f,#e67e22);color:#222}
+.btn.gh{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.3);color:#fff}
+.btn.gh:hover{background:rgba(255,255,255,.22)}
+.ew{font-size:28px;font-weight:900;margin-bottom:12px}
+.st{background:rgba(0,0,0,.3);border-radius:14px;padding:18px 24px;margin:16px 0 24px;font-size:18px}
+.sr{display:flex;justify-content:space-between;align-items:center;padding:6px 0}
+.sr+.sr{border-top:1px solid rgba(255,255,255,.15);margin-top:6px;padding-top:12px}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<video id="bg-video" autoplay loop muted playsinline>
+  <source src="bg1.mp4" type="video/mp4">
+</video>
+
+<div id="pb-wrap" class="hidden"><div id="pb"></div></div>
+<div id="hud" class="hidden"></div>
+
+<div id="gc">
+  <div id="cartA"  class="cart" data-type="a" ><img src="cart1.PNG" alt="A" ><div class="cart-lbl" id="lbl-a" >A</div></div>
+  <div id="cartAn" class="cart" data-type="an"><img src="cart2.PNG" alt="An"><div class="cart-lbl" id="lbl-an">An</div></div>
+</div>
+
+<div id="hint" class="hidden">🟡 Yellow bubbles start with a vowel sound — use the "An" cart!</div>
+
+<!-- MAIN MENU -->
+<div id="m-menu" class="ov">
+  <div class="md">
+    <div style="font-size:52px;margin-bottom:6px">🌋</div>
+    <div class="mt">Vowel Volcano</div>
+    <div class="ms">Sort words into the right "A" or "An" cart!<br><small style="opacity:.6">Move your cart to catch bubbles — stationary carts bounce them away!</small></div>
+    <div class="btn-row">
+      <div class="mc" id="btn-solo"><span class="mci">🧑</span><span class="mcn">1 Player</span><span class="mcd">Drag both carts with mouse</span></div>
+      <div class="mc" id="btn-team"><span class="mci">👥</span><span class="mcn">2 Players</span><span class="mcd">Mouse &amp; Arrow Keys</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- DIFFICULTY -->
+<div id="m-diff" class="ov hidden">
+  <div class="md">
+    <div class="mt" style="font-size:34px">Choose Difficulty</div>
+    <div class="ms" id="diff-ctx">Select a level</div>
+    <div class="btn-row" style="margin-bottom:22px">
+      <div class="dc easy" data-d="easy"><span class="dci">🌱</span><span class="dcn">Easy</span><span class="dca">Ages 7+</span><span class="dcd">Slow · 1 bubble<br>Hints + trajectory</span></div>
+      <div class="dc med"  data-d="medium"><span class="dci">🔥</span><span class="dcn">Medium</span><span class="dca">Ages 10+</span><span class="dcd">Faster · 2 bubbles<br>3 lives</span></div>
+      <div class="dc hard" data-d="hard"><span class="dci">🌋</span><span class="dcn">Hard</span><span class="dca">Challenge!</span><span class="dcd">Fast · 3 bubbles<br>3 lives</span></div>
+    </div>
+    <button class="btn gh" id="btn-back">← Back</button>
+  </div>
+</div>
+
+<!-- END SCREEN -->
+<div id="m-end" class="ov hidden">
+  <div class="md">
+    <div class="mt">🎉 Well Done!</div>
+    <div id="e-win" class="ew"></div>
+    <div id="e-sc" class="st"></div>
+    <div class="btn-row">
+      <button class="btn pr" id="btn-restart">Play Again</button>
+      <button class="btn gh" id="btn-menu">Main Menu</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+// ══════════════════════════════════════════════
+// ORIGINAL WORDS — used for ALL modes and levels
+// Each word appears twice in the pool (matches original game)
+// ══════════════════════════════════════════════
+const A_WORDS  = ['cat','dog','tree','book','car','ball','fish','house'];
+const AN_WORDS = ['apple','ant','egg','umbrella','orange','elephant','animal','ice-cream'];
+
+// ══════════════════════════════════════════════
+// DIFFICULTY CONFIG
+// ══════════════════════════════════════════════
+// Volcano crater spawn position (% of screen) — adjust to match your video
+const VOLC_X_PCT = 0.50;   // 50% horizontal (volcano is centered)
+const VOLC_Y_PCT = 0.19;   // 19% from top   (adjust if crater appears higher/lower)
+
+const DIFF = {
+  //              grav  vy burst range   vx range    max  spawnMs  catchMs  cartW bsz  minUp lives hints traj
+  easy:  {grav:.012, vyB:[1.8,2.8], vx:[.4,1.4], max:1, spawnMs:5500, catchMs:5000, cartW:280, bsz:110, minUp:2.5, lives:null, hints:true,  traj:true},
+  medium:{grav:.022, vyB:[2.5,4.0], vx:[1.2,3.2], max:2, spawnMs:3000, catchMs:1100, cartW:240, bsz:100, minUp:3.5, lives:3,    hints:false, traj:false},
+  hard:  {grav:.034, vyB:[3.5,5.5], vx:[2.2,5.2], max:3, spawnMs:1700, catchMs:450,  cartW:200, bsz:90,  minUp:5.0, lives:3,    hints:false, traj:false}
+};
+
+// ══════════════════════════════════════════════
+// AUDIO ENGINE  (Web Audio API — no files needed)
+// ══════════════════════════════════════════════
+let _ac = null;
+function initAudio(){ if(!_ac) _ac = new (window.AudioContext||window.webkitAudioContext)(); }
+function _r(){ if(_ac && _ac.state==='suspended') _ac.resume(); }
+function _tone(f, type, dur, vol, delay=0, f2=null){
+  if(!_ac) return; _r();
+  const t=_ac.currentTime+delay, o=_ac.createOscillator(), g=_ac.createGain();
+  o.connect(g); g.connect(_ac.destination);
+  o.type=type; o.frequency.setValueAtTime(f,t);
+  if(f2!=null) o.frequency.linearRampToValueAtTime(f2, t+dur);
+  g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  o.start(t); o.stop(t+dur+.05);
+}
+const SFX = {
+  pop()    { _tone(650,'sine',.12,.35,0,200); },
+  correct(){ [523.25,659.25,783.99].forEach((f,i)=>_tone(f,'sine',.35,.25,i*.09)); },
+  wrong()  { _tone(280,'sawtooth',.42,.28,0,110); },
+  bounce() { _tone(200,'sine',.09,.06,0,100); },
+  start()  { [261.63,329.63,392,523.25].forEach((f,i)=>_tone(f,'sine',.45,.22,i*.1)); },
+  end(w)   { (w?[523.25,659.25,783.99,1046.5]:[392,349.23,293.66]).forEach((f,i)=>_tone(f,'sine',.6,.22,i*.15)); }
+};
+
+// ══════════════════════════════════════════════
+// DOM
+// ══════════════════════════════════════════════
+const $gc   = document.getElementById('gc');
+const $cA   = document.getElementById('cartA');
+const $cAn  = document.getElementById('cartAn');
+const $hud  = document.getElementById('hud');
+const $pbw  = document.getElementById('pb-wrap');
+const $pb   = document.getElementById('pb');
+const $hint = document.getElementById('hint');
+const $mMenu = document.getElementById('m-menu');
+const $mDiff = document.getElementById('m-diff');
+const $mEnd  = document.getElementById('m-end');
+
+// ══════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════
+let gameMode='solo', diffK='easy', running=false;
+let score=0, p1=0, p2=0, lives=null;
+let pool=[], total=0, caught=0, bubbles=[];
+let spawnT=null, rafId=null;
+
+// Cart movement tracking — core of no-auto-catch mechanic
+const ci = { cartA:{t:0}, cartAn:{t:0} };
+const keys = new Set();
+
+document.addEventListener('keydown', e=>{
+  if(['ArrowLeft','ArrowRight'].includes(e.key)){
+    e.preventDefault(); keys.add(e.key);
+    if(running) ci.cartAn.t = Date.now();
+  }
+});
+document.addEventListener('keyup', e=>keys.delete(e.key));
+
+let $tl=null, $td=null; // trajectory elements
+
+// ══════════════════════════════════════════════
+// CART LAYOUT & DRAG
+// ══════════════════════════════════════════════
+function clamp(el, x){
+  const w = el.offsetWidth || parseInt(el.style.width) || 240;
+  return Math.max(0, Math.min(x, innerWidth-w));
+}
+
+function layoutCarts(){
+  const d=DIFF[diffK], w=d.cartW, h=Math.round(w*.75);
+  [$cA,$cAn].forEach(c=>{ c.style.width=w+'px'; c.style.height=h+'px'; });
+  document.getElementById('lbl-a').style.fontSize  = Math.round(w*.27)+'px';
+  document.getElementById('lbl-an').style.fontSize = Math.round(w*.22)+'px';
+  $cA.style.left  = clamp($cA,  Math.round(innerWidth*.18 - w/2)) + 'px';
+  $cAn.style.left = clamp($cAn, Math.round(innerWidth*.72 - w/2)) + 'px';
+  document.querySelectorAll('.pbadge,.khint').forEach(n=>n.remove());
+  if(gameMode==='team'){
+    const b1=mkBadge('🖱 Player 1','#1a6fb5'); $cA.appendChild(b1);
+    const b2=mkBadge('⌨ Player 2','#a85000'); $cAn.appendChild(b2);
+    const kh=document.createElement('div'); kh.className='khint'; kh.textContent='← → arrow keys'; $cAn.appendChild(kh);
+  }
+}
+
+function mkBadge(txt,bg){
+  const b=document.createElement('div'); b.className='pbadge'; b.style.background=bg; b.textContent=txt; return b;
+}
+
+function makeDraggable(cart, id){
+  let drag=false, ox=0;
+  cart.addEventListener('pointerdown', e=>{
+    if(!running) return;
+    if(gameMode==='team' && id==='cartAn') return;
+    drag=true; ci[id].t=Date.now();
+    ox=e.clientX - cart.getBoundingClientRect().left;
+    cart.setPointerCapture(e.pointerId); e.preventDefault();
+  });
+  cart.addEventListener('pointermove', e=>{
+    if(!drag||!running) return;
+    cart.style.left = clamp(cart, e.clientX-ox) + 'px';
+    ci[id].t = Date.now();
+  });
+  const up=e=>{ drag=false; cart.releasePointerCapture(e.pointerId); };
+  cart.addEventListener('pointerup', up);
+  cart.addEventListener('pointercancel', up);
+}
+makeDraggable($cA,  'cartA');
+makeDraggable($cAn, 'cartAn');
+
+function moveByKeys(){
+  if(!running) return;
+  const spd = diffK==='hard'?9 : diffK==='medium'?8 : 6;
+  let x = parseFloat($cAn.style.left)||0, mv=false;
+  if(keys.has('ArrowLeft'))  { x-=spd; mv=true; }
+  if(keys.has('ArrowRight')) { x+=spd; mv=true; }
+  if(mv){ $cAn.style.left = clamp($cAn,x)+'px'; ci.cartAn.t=Date.now(); }
+}
+
+// ══════════════════════════════════════════════
+// HUD
+// ══════════════════════════════════════════════
+function buildHUD(){
+  const d=DIFF[diffK];
+  const lH = d.lives ? `<div class="hb cr"><div class="hl">Lives</div><div id="hv-l" style="font-size:22px"></div></div>` : '<div></div>';
+  $hud.innerHTML = gameMode==='solo'
+    ? `<div class="hb"><div class="hl">Score</div><div class="hv" id="hv-s">0</div></div>${lH}<div class="hb ri"><div class="hl">Remaining</div><div class="hv" id="hv-w">0</div></div>`
+    : `<div class="hb p1"><div class="hl" style="color:#60dfff">🖱 Player 1</div><div class="hv" id="hv-p1">0</div></div>${lH}<div class="hb ri p2"><div class="hl" style="color:#ffa940">⌨ Player 2</div><div class="hv" id="hv-p2">0</div></div>`;
+  $hud.classList.remove('hidden'); $pbw.classList.remove('hidden');
+}
+
+function refreshHUD(){
+  if(gameMode==='solo'){ const e=document.getElementById('hv-s'); if(e) e.textContent=score; }
+  else {
+    const a=document.getElementById('hv-p1'), b=document.getElementById('hv-p2');
+    if(a) a.textContent=p1; if(b) b.textContent=p2;
+  }
+  const lv=document.getElementById('hv-l');
+  if(lv && lives!=null){
+    const mx=DIFF[diffK].lives;
+    lv.textContent='❤️'.repeat(Math.max(0,lives))+'🖤'.repeat(Math.max(0,mx-lives));
+  }
+  const wv=document.getElementById('hv-w');
+  if(wv) wv.textContent = pool.length + bubbles.filter(b=>!b.dead).length;
+  if(total>0) $pb.style.width=(caught/total*100)+'%';
+}
+
+// ══════════════════════════════════════════════
+// PARTICLES & SCORE POPUPS
+// ══════════════════════════════════════════════
+function particles(cx, cy, ok){
+  const pal = ok ? ['#ffef00','#00ff88','#00cfff','#ff88ff','#fff'] : ['#ff4433','#ff8822','#ffcc00'];
+  const n = ok ? 18 : 9;
+  for(let i=0;i<n;i++){
+    const p=document.createElement('div'); p.className='pt';
+    const sz=5+Math.random()*10;
+    p.style.cssText=`width:${sz}px;height:${sz}px;left:${cx}px;top:${cy}px;background:${pal[i%pal.length]};opacity:1`;
+    $gc.appendChild(p);
+    const ang=(i/n)*Math.PI*2+Math.random()*.4, spd=50+Math.random()*90;
+    requestAnimationFrame(()=>{
+      p.style.transition=`transform ${.5+Math.random()*.35}s ease-out,opacity .65s ease-out`;
+      p.style.transform=`translate(${Math.cos(ang)*spd}px,${Math.sin(ang)*spd}px)`;
+      p.style.opacity='0';
+    });
+    setTimeout(()=>p.remove(), 1000);
+  }
+}
+
+function scorePop(x, y, txt, col='#ffe135'){
+  const e=document.createElement('div'); e.className='sp';
+  e.style.cssText=`left:${x}px;top:${y}px;color:${col};font-size:30px`; e.textContent=txt;
+  $gc.appendChild(e); setTimeout(()=>e.remove(), 950);
+}
+
+// ══════════════════════════════════════════════
+// TRAJECTORY INDICATOR (Easy mode)
+// Shows dotted line + pulsing target dot predicting where bubble will land
+// ══════════════════════════════════════════════
+function ensureTraj(){
+  if(!$tl){ $tl=document.createElement('div'); $tl.className='tl'; $gc.appendChild($tl); }
+  if(!$td){ $td=document.createElement('div'); $td.className='td'; $gc.appendChild($td); }
+}
+function hideTraj(){ if($tl)$tl.style.display='none'; if($td)$td.style.display='none'; }
+
+function updateTraj(){
+  if(!DIFF[diffK].traj){ hideTraj(); return; }
+  ensureTraj();
+  const alive = bubbles.filter(b=>!b.dead && !b.spawning);
+  if(!alive.length){ hideTraj(); return; }
+  const b=alive[0], d=DIFF[diffK];
+  const floorY = $cA.getBoundingClientRect().top;
+  // Simulate physics forward to find landing X
+  let sx=b.x, sy=b.y, svx=b.vx, svy=b.vy, landX=null;
+  for(let s=0; s<500; s++){
+    svy+=d.grav; sx+=svx; sy+=svy;
+    if(sx<=0){sx=0;svx=Math.abs(svx);}
+    else if(sx+d.bsz>=innerWidth){sx=innerWidth-d.bsz;svx=-Math.abs(svx);}
+    if(sy+d.bsz>=floorY){ landX=sx+d.bsz/2; break; }
+  }
+  if(landX==null){ hideTraj(); return; }
+  const topY=b.y+d.bsz, ht=Math.max(0,floorY-topY);
+  $tl.style.cssText=`display:block;left:${landX}px;top:${topY}px;height:${ht}px`;
+  $td.style.cssText=`display:block;left:${landX}px;top:${floorY}px`;
+}
+
+// ══════════════════════════════════════════════
+// BUBBLE SPAWNING — from volcano crater
+// Bubbles grow from scale 0 → 1 as they emerge (spawning flag prevents collision during growth)
+// ══════════════════════════════════════════════
+const SPAWN_DUR = 480; // ms for bubble to grow to full size
+
+function spawnBubble(){
+  if(!running || !pool.length) return;
+  const d=DIFF[diffK];
+  if(bubbles.filter(b=>!b.dead).length >= d.max){ schedSpawn(1500); return; }
+
+  const wo = pool.pop(), sz=d.bsz;
+  const el = document.createElement('div'); el.className='bubble';
+  el.style.width = el.style.height = sz+'px';
+  const fz = wo.text.length>8?13 : wo.text.length>6?16 : wo.text.length>4?19 : 22;
+  el.style.fontSize = fz+'px';
+  if(d.hints && /^[aeiouAEIOU]/.test(wo.text)) el.classList.add('bv');
+  el.textContent = wo.text;
+
+  // Spawn AT volcano crater with small random spread
+  const volcX = innerWidth  * VOLC_X_PCT;
+  const volcY = innerHeight * VOLC_Y_PCT;
+  const sx = volcX + (Math.random()-.5)*50 - sz/2;   // slight crater-width spread
+  const sy = volcY - sz/2;
+
+  // Start at scale 0
+  el.style.transform = 'scale(0)';
+  el.style.left = sx+'px';
+  el.style.top  = sy+'px';
+  $gc.appendChild(el);
+
+  // Initial velocity: UPWARD burst from volcano + horizontal spread
+  const vxSign = Math.random()>.5 ? 1 : -1;
+  const vx = vxSign * (d.vx[0] + Math.random()*(d.vx[1]-d.vx[0]));
+  const vy = -(d.vyB[0] + Math.random()*(d.vyB[1]-d.vyB[0]));  // negative = upward
+
+  bubbles.push({
+    el, x:sx, y:sy, sz, vx, vy,
+    type: wo.type,
+    bouncing: false, dead: false,
+    spawning: true,
+    spawnTime: Date.now()
+  });
+  SFX.pop();
+  if(pool.length>0) schedSpawn(d.spawnMs);
+}
+
+function schedSpawn(ms){ clearTimeout(spawnT); if(running) spawnT=setTimeout(spawnBubble, ms); }
+
+// ══════════════════════════════════════════════
+// COLLISION DETECTION
+//
+// Key mechanic:
+//   ACTIVE cart (moved within catchMs):  catches bubble from ANY direction
+//   INACTIVE cart (stationary too long): bounces bubble away — kids MUST move!
+// ══════════════════════════════════════════════
+function cartIsActive(id){ return Date.now()-ci[id].t < DIFF[diffK].catchMs; }
+
+function checkColl(b, cart, id){
+  const cr  = cart.getBoundingClientRect();
+  const bx  = b.x + b.sz/2;
+  const by  = b.y + b.sz/2;
+
+  // Bubble center must be near the cart
+  if(bx < cr.left-8 || bx > cr.right+8 || by < cr.top-8 || by > cr.bottom+8) return false;
+
+  const active  = cartIsActive(id);
+  const correct = b.type === cart.dataset.type;
+
+  if(active && correct)   { doCorrect(b, cart, id); return true; }
+  if(active && !correct)  { doWrong(b, cart);       return true; }
+  doBounce(b, cr);  // inactive cart → bounce
+  return true;
+}
+
+// ── CORRECT CATCH: beautiful pop animation ──
+function doCorrect(b, cart, id){
+  SFX.correct(); caught++;
+  if(gameMode==='solo')       score+=10;
+  else if(id==='cartA')       p1+=10;
+  else                        p2+=10;
+  b.dead = true;
+
+  // Stop wobble, play pop burst animation
+  b.el.style.animation = 'popBurst 0.38s ease-out forwards';
+  b.el.style.transform  = '';  // clear spawn scale
+
+  // Expanding pop rings (3 waves)
+  const ringColor = b.type==='an' ? 'rgba(255,220,50,.9)' : 'rgba(100,220,255,.9)';
+  for(let i=0;i<3;i++){
+    const ring = document.createElement('div'); ring.className='pop-ring';
+    ring.style.cssText = `width:${b.sz}px;height:${b.sz}px;left:${b.x}px;top:${b.y}px;border:3px solid ${ringColor};animation-delay:${i*.09}s`;
+    $gc.appendChild(ring);
+    setTimeout(()=>ring.remove(), 650);
+  }
+
+  particles(b.x+b.sz/2, b.y+b.sz/2, true);
+  scorePop(b.x+b.sz/2-20, b.y, '+10');
+  setTimeout(()=>b.el&&b.el.remove(), 400);
+
+  cart.classList.remove('cw'); cart.classList.add('ca');
+  setTimeout(()=>cart.classList.remove('ca'), 400);
+  if(pool.length>0) schedSpawn(600);
+}
+
+// ── WRONG CART ──
+function doWrong(b, cart){
+  SFX.wrong();
+  if(lives!=null){ lives=Math.max(0,lives-1); if(lives===0){ setTimeout(endGame,600); return; } }
+  b.vy = -(4+Math.random()*2);
+  b.vx = (b.x>innerWidth/2?-1:1)*(3+Math.random()*2);
+  b.bouncing = true;
+  b.el.classList.add('bw'); cart.classList.add('cw');
+  particles(b.x+b.sz/2, b.y+b.sz/2, false);
+  scorePop(b.x+b.sz/2-10, b.y, '✗', '#ff4433');
+  setTimeout(()=>{ if(b.el)b.el.classList.remove('bw'); b.bouncing=false; }, 1100);
+  setTimeout(()=>cart.classList.remove('cw'), 420);
+}
+
+// ── INACTIVE CART BOUNCE — determine direction and reverse appropriate velocity ──
+function doBounce(b, cr){
+  const bx=b.x+b.sz/2, by=b.y+b.sz/2;
+  const dTop   = Math.abs(by - cr.top);
+  const dBot   = Math.abs(by - cr.bottom);
+  const dLeft  = Math.abs(bx - cr.left);
+  const dRight = Math.abs(bx - cr.right);
+  const minD   = Math.min(dTop, dBot, dLeft, dRight);
+
+  if(minD===dTop && b.vy>0){
+    b.y = cr.top - b.sz - 2;
+    b.vy = -Math.max(Math.abs(b.vy)*.82, 2);
+  } else if(minD===dBot && b.vy<0){
+    b.y = cr.bottom + 2;
+    b.vy = Math.abs(b.vy)*.82;
+  } else if(minD===dLeft && b.vx>0){
+    b.x = cr.left - b.sz - 2;
+    b.vx = -Math.abs(b.vx);
+  } else if(minD===dRight && b.vx<0){
+    b.x = cr.right + 2;
+    b.vx = Math.abs(b.vx);
+  } else {
+    // fallback
+    b.vy = -Math.max(Math.abs(b.vy)*.8, 2);
+  }
+  SFX.bounce();
+}
+
+// ══════════════════════════════════════════════
+// GAME LOOP
+// ══════════════════════════════════════════════
+function gameLoop(){
+  if(!running) return;
+  moveByKeys();
+  const d = DIFF[diffK];
+
+  // Cart green glow when active (recently moved = ready to catch)
+  $cA.classList.toggle('ca',  cartIsActive('cartA')  && !$cA.classList.contains('cw'));
+  $cAn.classList.toggle('ca', cartIsActive('cartAn') && !$cAn.classList.contains('cw'));
+
+  for(let i=bubbles.length-1; i>=0; i--){
+    const b = bubbles[i];
+    if(b.dead){ bubbles.splice(i,1); checkOver(); continue; }
+
+    // ── SPAWN GROW ANIMATION ──
+    // Bubble grows from scale 0 to 1 over SPAWN_DUR ms using smooth ease-out
+    if(b.spawning){
+      const t = (Date.now() - b.spawnTime) / SPAWN_DUR;
+      if(t >= 1){
+        b.spawning = false;
+        b.el.style.transform = '';      // clear JS scale, let CSS wobble take over
+        b.el.classList.add('wobbling'); // enable CSS wobble animation
+      } else {
+        // Ease-out-back: slight overshoot for a fun "pop out" feel
+        const ease = t < 1 ? 1 - Math.pow(1-t, 2.5) : 1;
+        const overshoot = t > 0.7 ? 1 + Math.sin((t-0.7)/0.3*Math.PI)*0.12 : ease;
+        b.el.style.transform = `scale(${Math.min(1.12, overshoot)})`;
+      }
+    }
+
+    // ── PHYSICS ──
+    b.vy += d.grav;
+    b.x  += b.vx;
+    b.y  += b.vy;
+
+    // Wall bounces
+    if(b.x<=0){ b.x=0; b.vx=Math.abs(b.vx); }
+    else if(b.x+b.sz>=innerWidth){ b.x=innerWidth-b.sz; b.vx=-Math.abs(b.vx); }
+
+    // Top — bubbles from volcano may go briefly above screen, bounce back
+    if(b.y < -b.sz){
+      b.y = -b.sz;
+      if(b.vy<0) b.vy = Math.abs(b.vy) * 0.5; // gentle top bounce
+    }
+
+    // Floor — strong upward bounce so bubbles keep bouncing vigorously
+    if(b.y+b.sz >= innerHeight-5){
+      b.y  = innerHeight - b.sz - 5;
+      b.vy = -Math.max(Math.abs(b.vy)*.82, d.minUp);
+      if(Math.abs(b.vx)<0.5) b.vx = (Math.random()>.5?1:-1)*1.8;
+      SFX.bounce();
+    }
+
+    b.el.style.left = b.x+'px';
+    b.el.style.top  = b.y+'px';
+
+    // ── COLLISION (skip while spawning or bouncing cooldown) ──
+    if(!b.spawning && !b.bouncing){
+      const hA = checkColl(b, $cA,  'cartA');
+      if(!hA)   checkColl(b, $cAn, 'cartAn');
+    }
+  }
+
+  updateTraj();
+  refreshHUD();
+  rafId = requestAnimationFrame(gameLoop);
+}
+
+function checkOver(){
+  if(!running) return;
+  if(pool.length===0 && bubbles.filter(b=>!b.dead).length===0) endGame();
+}
+
+// ══════════════════════════════════════════════
+// GAME FLOW
+// ══════════════════════════════════════════════
+function startGame(){
+  running=false; clearTimeout(spawnT); if(rafId) cancelAnimationFrame(rafId);
+  bubbles.forEach(b=>b.el&&b.el.remove()); bubbles=[];
+  hideTraj(); keys.clear();
+  score=p1=p2=0; lives=DIFF[diffK].lives;
+
+  // Build pool: original words × 2 each, shuffled
+  const arr = [
+    ...A_WORDS.map(t=>({text:t,type:'a'})),  ...A_WORDS.map(t=>({text:t,type:'a'})),
+    ...AN_WORDS.map(t=>({text:t,type:'an'})), ...AN_WORDS.map(t=>({text:t,type:'an'}))
+  ];
+  for(let i=arr.length-1;i>0;i--){ const j=0|Math.random()*(i+1); [arr[i],arr[j]]=[arr[j],arr[i]]; }
+  pool=arr; total=pool.length; caught=0;
+
+  layoutCarts(); buildHUD();
+  DIFF[diffK].hints ? $hint.classList.remove('hidden') : $hint.classList.add('hidden');
+  [$mMenu,$mDiff,$mEnd].forEach(m=>m.classList.add('hidden'));
+  $pb.style.width='0%';
+  running=true; SFX.start(); schedSpawn(1800);
+  rafId=requestAnimationFrame(gameLoop);
+}
+
+function endGame(){
+  if(!running) return;
+  running=false; clearTimeout(spawnT); if(rafId) cancelAnimationFrame(rafId);
+  bubbles.forEach(b=>{
+    if(!b.dead && b.el){
+      b.el.style.transition='transform .3s,opacity .3s';
+      b.el.style.transform='scale(0)'; b.el.style.opacity='0';
+      setTimeout(()=>b.el&&b.el.remove(),400);
+    }
+  });
+  hideTraj(); $hint.classList.add('hidden'); $hud.classList.add('hidden'); $pbw.classList.add('hidden');
+  SFX.end(caught===total && lives!==0);
+
+  const $ew=document.getElementById('e-win'), $es=document.getElementById('e-sc');
+  const diffLabel = diffK==='easy'?'🌱 Easy':diffK==='medium'?'🔥 Medium':'🌋 Hard';
+  if(gameMode==='solo'){
+    $ew.textContent='';
+    $es.innerHTML=`<div class="sr"><span>⭐ Final Score</span><span style="color:#ffe135;font-weight:900;font-size:26px">${score}</span></div>
+      <div class="sr" style="font-size:15px;opacity:.7"><span>Words caught</span><span>${caught} / ${total}</span></div>
+      <div class="sr" style="font-size:15px;opacity:.7"><span>Level</span><span>${diffLabel}</span></div>`;
+  } else {
+    if(p1>p2){$ew.textContent='🏆 Player 1 wins!';$ew.style.color='#60dfff';}
+    else if(p2>p1){$ew.textContent='🏆 Player 2 wins!';$ew.style.color='#ffa940';}
+    else{$ew.textContent="🤝 It's a tie!";$ew.style.color='#fff';}
+    $es.innerHTML=`<div class="sr" style="color:#60dfff"><span>🖱 Player 1 (A cart)</span><span style="font-weight:900">${p1} pts</span></div>
+      <div class="sr" style="color:#ffa940"><span>⌨ Player 2 (An cart)</span><span style="font-weight:900">${p2} pts</span></div>
+      <div class="sr" style="font-size:15px;opacity:.65"><span>Team · Caught</span><span>${p1+p2} pts · ${caught}/${total}</span></div>`;
+  }
+  $mEnd.classList.remove('hidden');
+}
+
+function goMenu(){
+  running=false; clearTimeout(spawnT); if(rafId) cancelAnimationFrame(rafId);
+  bubbles.forEach(b=>b.el&&b.el.remove()); bubbles=[]; hideTraj(); keys.clear();
+  $hud.classList.add('hidden'); $pbw.classList.add('hidden'); $hint.classList.add('hidden');
+  [$mDiff,$mEnd].forEach(m=>m.classList.add('hidden')); $mMenu.classList.remove('hidden');
+}
+
+// ══════════════════════════════════════════════
+// EVENT LISTENERS
+// ══════════════════════════════════════════════
+document.getElementById('btn-solo').addEventListener('click',()=>{
+  initAudio(); gameMode='solo';
+  document.getElementById('diff-ctx').textContent='1 Player — drag both carts with your mouse';
+  $mMenu.classList.add('hidden'); $mDiff.classList.remove('hidden');
+});
+document.getElementById('btn-team').addEventListener('click',()=>{
+  initAudio(); gameMode='team';
+  document.getElementById('diff-ctx').textContent='Team — Player 1: mouse  ·  Player 2: ← → arrow keys';
+  $mMenu.classList.add('hidden'); $mDiff.classList.remove('hidden');
+});
+document.querySelectorAll('.dc').forEach(c=>c.addEventListener('click',()=>{ diffK=c.dataset.d; startGame(); }));
+document.getElementById('btn-back').addEventListener('click',()=>{ $mDiff.classList.add('hidden'); $mMenu.classList.remove('hidden'); });
+document.getElementById('btn-restart').addEventListener('click', startGame);
+document.getElementById('btn-menu').addEventListener('click', goMenu);
+
+// Default cart size before first game
+[$cA,$cAn].forEach(c=>{ c.style.width='240px'; c.style.height='180px'; });
+$cA.style.left  = Math.round(innerWidth*.18-120)+'px';
+$cAn.style.left = Math.round(innerWidth*.72-120)+'px';
+
+window.addEventListener('resize',()=>{
+  if(running) [$cA,$cAn].forEach(c=>{ c.style.left=clamp(c,parseFloat(c.style.left)||0)+'px'; });
+});
+</script>
+</body>
+</html>
